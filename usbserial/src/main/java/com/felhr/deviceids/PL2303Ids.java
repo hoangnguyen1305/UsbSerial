@@ -67,7 +67,8 @@ public class PL2303Ids
             createDevice(0x0b63, 0x6530),
             createDevice(0x0b8c, 0x2303),
             createDevice(0x110a, 0x1150),
-            createDevice(0x0557, 0x2008)
+            createDevice(0x0557, 0x2008),
+            createDevice(0x067b, 0x23a3)
     );
 
     public static boolean isDeviceSupported(int vendorId, int productId)
