@@ -10,22 +10,18 @@ import android.util.Log;
 
 import com.felhr.utils.SafeUsbRequest;
 
-public class PL2303GSerialDevice extends UsbSerialDevice
+public class PL2303SerialDevice extends UsbSerialDevice
 {
-    private static final String CLASS_ID = PL2303GSerialDevice.class.getSimpleName();
+    private static final String CLASS_ID = PL2303SerialDevice.class.getSimpleName();
 
     private static final int PL2303_REQTYPE_HOST2DEVICE_VENDOR = 0x40;
     private static final int PL2303_REQTYPE_DEVICE2HOST_VENDOR = 0xC0;
     private static final int PL2303_REQTYPE_HOST2DEVICE = 0x21;
 
-    private static final int PL2303_VENDOR_READ_REQUEST = 0x01;
-    private static final int PL2303_VENDOR_READ_NREQUEST = 0x81;
+    private static final int PL2303_VENDOR_WRITE_REQUEST = 0x01;
     private static final int PL2303_SET_LINE_CODING = 0x20;
     private static final int PL2303_SET_CONTROL_REQUEST = 0x22;
-    private static final int PL2303_READ_TYPE_HX_STATUS = 0x8080;
-    private static final int PL2303_HXN_RESET_REG = 0x7;
-    private static final int PL2303_HXN_RESET_UPSTREAM_PIPE	= 0x2;
-    private static final int PL2303_HXN_RESET_DOWNSTREAM_PIPE = 0x1;
+
     private final byte[] defaultSetLine = new byte[]{
             (byte) 0x80, // [0:3] Baud rate (reverse hex encoding 9600:00 00 25 80 -> 80 25 00 00)
             (byte) 0x25,
@@ -42,12 +38,12 @@ public class PL2303GSerialDevice extends UsbSerialDevice
     private UsbEndpoint outEndpoint;
 
 
-    public PL2303GSerialDevice(UsbDevice device, UsbDeviceConnection connection)
+    public PL2303SerialDevice(UsbDevice device, UsbDeviceConnection connection)
     {
         this(device, connection, -1);
     }
 
-    public PL2303GSerialDevice(UsbDevice device, UsbDeviceConnection connection, int iface)
+    public PL2303SerialDevice(UsbDevice device, UsbDeviceConnection connection, int iface)
     {
         super(device, connection);
 
@@ -62,7 +58,7 @@ public class PL2303GSerialDevice extends UsbSerialDevice
     @Override
     public boolean open()
     {
-        boolean ret = openPL2303G();
+        boolean ret = openPL2303();
 
         if(ret)
         {
@@ -100,7 +96,7 @@ public class PL2303GSerialDevice extends UsbSerialDevice
     @Override
     public boolean syncOpen()
     {
-        boolean ret = openPL2303G();
+        boolean ret = openPL2303();
         if(ret)
         {
             setSyncParams(inEndpoint, outEndpoint);
@@ -322,7 +318,7 @@ public class PL2303GSerialDevice extends UsbSerialDevice
         //TODO
     }
 
-    private boolean openPL2303G()
+    private boolean openPL2303()
     {
         if(connection.claimInterface(mInterface, true))
         {
@@ -348,10 +344,36 @@ public class PL2303GSerialDevice extends UsbSerialDevice
 
         //Default Setup
         byte[] buf = new byte[1];
-        setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_READ_REQUEST, PL2303_READ_TYPE_HX_STATUS, 0, buf); // TODO. check TYPE_1 or TYPE_HN
-
-        setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_READ_NREQUEST, PL2303_HXN_RESET_REG, PL2303_HXN_RESET_UPSTREAM_PIPE | PL2303_HXN_RESET_DOWNSTREAM_PIPE, null);
-
+        //Specific vendor stuff that I barely understand but It is on linux drivers, So I trust :)
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8484, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0404, 0, null) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8484, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8383, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8484, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0404, 1, null) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8484, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_DEVICE2HOST_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x8383, 0, buf) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0000, 1, null) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0001, 0, null) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0002, 0x0044, null) < 0)
+            return false;
+        // End of specific vendor stuff
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE, PL2303_SET_CONTROL_REQUEST, 0x0003, 0,null) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE, PL2303_SET_LINE_CODING, 0x0000, 0, defaultSetLine) < 0)
+            return false;
+        if(setControlCommand(PL2303_REQTYPE_HOST2DEVICE_VENDOR, PL2303_VENDOR_WRITE_REQUEST, 0x0505, 0x1311, null) < 0)
+            return false;
 
         return true;
     }
